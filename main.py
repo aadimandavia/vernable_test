@@ -30,9 +30,9 @@ db.commit()
 @app.get("/users")
 def get_user(id: str):
     # INTENTIONALLY VULNERABLE
-    query = "SELECT * FROM users WHERE id = " + id
+    query = "SELECT * FROM users WHERE id = ?"
 
-    cursor = db.execute(query)
+    cursor = db.execute(query, (id,))
     rows = cursor.fetchall()
 
     return {
