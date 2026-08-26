@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from pathlib import Path
 import sqlite3
+import os
 
 app = FastAPI()
 
@@ -22,12 +25,14 @@ db.commit()
 
 
 # ============================================================
-# VULNERABILITY 1: SQL INJECTION (CWE-89)
+# VULNERABILITY 1 — SQL INJECTION (CWE-89)
 # ============================================================
 
 @app.get("/users")
 def get_user(id: str):
     # INTENTIONALLY VULNERABLE
+    #
+    # User-controlled "id" flows directly into SQL.
     query = "SELECT * FROM users WHERE id = " + id
 
     cursor = db.execute(query)
@@ -39,36 +44,39 @@ def get_user(id: str):
 
 
 # ============================================================
-# VULNERABILITY 2: API RESOURCE / COST EXHAUSTION (CWE-400)
+# VULNERABILITY 2 — PATH TRAVERSAL (CWE-22)
 # ============================================================
 
-def expensive_external_api(prompt: str):
-    """
-    Simulates an expensive external AI/API operation.
+BASE_DIR = Path("files").resolve()
 
-    In the real application this could represent:
-      - OpenAI
-      - Anthropic
-      - Google Gemini
-      - another paid external API
-    """
+# Create a harmless test directory.
+BASE_DIR.mkdir(exist_ok=True)
 
-    # INTENTIONALLY EXPENSIVE OPERATION
-    return {
-        "result": "Processed expensive request",
-        "input_length": len(prompt)
-    }
+(BASE_DIR / "public.txt").write_text(
+    "This is a public file."
+)
+
+# Create a harmless file outside the allowed directory.
+SECRET_DIR = Path("sandbox_secret").resolve()
+SECRET_DIR.mkdir(exist_ok=True)
+
+(SECRET_DIR / "secret.txt").write_text(
+    "This is a synthetic secret file."
+)
 
 
-@app.post("/api/chat")
-def chat(prompt: str):
+@app.get("/download")
+def download_file(filename: str):
     # INTENTIONALLY VULNERABLE
     #
-    # No:
-    # - rate limiting
-    # - authentication requirement
-    # - input-size limit
-    # - request quota
-    # - abuse protection
+    # User-controlled filename is directly appended to BASE_DIR.
+    #
+    # Example malicious input:
+    #
+    # ../sandbox_secret/secret.txt
+    #
+    # can escape BASE_DIR.
 
-    return expensive_external_api(prompt)
+    file_path = BASE_DIR / filename
+
+    return FileResponse(file_path)
