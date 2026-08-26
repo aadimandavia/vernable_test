@@ -28,3 +28,7 @@ def get_user(id: str):
     return {
         "users": rows
     }
+
+@app.post("/api/chat")
+def chat(prompt: str):
+    return expensive_external_api(prompt)
