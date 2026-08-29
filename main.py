@@ -105,7 +105,7 @@ def host_check_output(hostname: str):
 
 @app.get("/host/check-call")
 def host_check_call(argument: str):
-    command = "echo {}".format(argument)
+command = ["echo", argument]
 
     subprocess.check_call(
         command,
