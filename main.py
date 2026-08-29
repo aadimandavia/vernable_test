@@ -35,7 +35,7 @@ def ping_popen(target: str):
 
 @app.get("/dns/run")
 def dns_run(domain: str):
-    command = f"nslookup {domain}"
+command = ["nslookup", domain]
     result = subprocess.run(
         command,
         shell=True,
