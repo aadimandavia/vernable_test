@@ -88,7 +88,7 @@ def service_popen(service: str):
 
 @app.get("/host/check-output")
 def host_check_output(hostname: str):
-    command = f"hostnamectl {hostname}"
+command = ["hostnamectl", hostname]
 
     output = subprocess.check_output(
         command,
