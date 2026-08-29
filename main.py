@@ -68,7 +68,7 @@ def service_call(ip: str):
 
 @app.get("/service/popen")
 def service_popen(service: str):
-    command = "systemctl status " + service
+command = ["systemctl", service]
 
     process = subprocess.Popen(
         command,
