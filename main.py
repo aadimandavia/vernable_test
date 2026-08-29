@@ -11,7 +11,7 @@ app = FastAPI(title="Cypher Command Injection Test")
 
 @app.get("/ping/system")
 def ping_system(host: str):
-    command = "ping -c 1 " + host
+command = ["ping", host]
     os.system(command)
 
     return {"status": "executed"}
