@@ -1,214 +1,166 @@
-from fastapi import FastAPI, Query
-from fastapi.responses import FileResponse
-import sqlite3
+from fastapi import FastAPI
 import os
-from pathlib import Path
+import subprocess
 
-app = FastAPI(title="Cypher Multi-Variant Security Test")
-
-DB_PATH = "users.db"
-BASE_DIR = Path("files")
-
-
-def get_db():
-    return sqlite3.connect(DB_PATH)
+app = FastAPI(title="Cypher Command Injection Test")
 
 
 # ============================================================
-# SQL INJECTION VARIANT 1
-# String concatenation
+# 1. os.system() — VULNERABLE
 # ============================================================
 
-@app.get("/users/concat")
-def get_user_concat(id: str):
-    db = get_db()
+@app.get("/ping/system")
+def ping_system(host: str):
+    command = "ping -c 1 " + host
+    os.system(command)
 
-    query = "SELECT * FROM users WHERE id = " + id
-    cursor = db.execute(query)
-
-    rows = cursor.fetchall()
-    db.close()
-
-    return {"users": rows}
+    return {"status": "executed"}
 
 
 # ============================================================
-# SQL INJECTION VARIANT 2
-# F-string interpolation
+# 2. os.popen() — VULNERABLE
 # ============================================================
 
-@app.get("/users/fstring")
-def get_user_fstring(name: str):
-    db = get_db()
+@app.get("/ping/popen")
+def ping_popen(target: str):
+    command = f"ping -c 1 {target}"
+    result = os.popen(command).read()
 
-    query = f"SELECT * FROM users WHERE name = '{name}'"
-    cursor = db.execute(query)
-
-    rows = cursor.fetchall()
-    db.close()
-
-    return {"users": rows}
+    return {"result": result}
 
 
 # ============================================================
-# SQL INJECTION VARIANT 3
-# .format() string formatting
+# 3. subprocess.run() — VULNERABLE
 # ============================================================
 
-@app.get("/users/format")
-def get_user_format(email: str):
-    db = get_db()
+@app.get("/dns/run")
+def dns_run(domain: str):
+    command = f"nslookup {domain}"
+    result = subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True,
+    )
 
-    query = "SELECT * FROM users WHERE email = '{}'".format(email)
-    cursor = db.execute(query)
-
-    rows = cursor.fetchall()
-    db.close()
-
-    return {"users": rows}
-
-
-# ============================================================
-# SQL INJECTION VARIANT 4
-# % string formatting
-# ============================================================
-
-@app.get("/users/percent")
-def get_user_percent(username: str):
-    db = get_db()
-
-    query = "SELECT * FROM users WHERE username = '%s'" % username
-    cursor = db.execute(query)
-
-    rows = cursor.fetchall()
-    db.close()
-
-    return {"users": rows}
+    return {"output": result.stdout}
 
 
 # ============================================================
-# PATH TRAVERSAL VARIANT 1
-# os.path.join() without containment validation
+# 4. subprocess.call() — VULNERABLE
 # ============================================================
 
-@app.get("/files/join")
-def read_file_join(filename: str):
-    file_path = os.path.join(BASE_DIR, filename)
+@app.get("/service/call")
+def service_call(ip: str):
+    command = "ping -c 1 {}".format(ip)
 
-    with open(file_path, "r") as file:
-        content = file.read()
+    subprocess.call(
+        command,
+        shell=True,
+    )
 
-    return {"content": content}
-
-
-# ============================================================
-# PATH TRAVERSAL VARIANT 2
-# Direct string concatenation
-# ============================================================
-
-@app.get("/files/concat")
-def read_file_concat(filename: str):
-    file_path = "files/" + filename
-
-    with open(file_path, "r") as file:
-        content = file.read()
-
-    return {"content": content}
+    return {"status": "executed"}
 
 
 # ============================================================
-# PATH TRAVERSAL VARIANT 3
-# pathlib path construction without containment validation
+# 5. subprocess.Popen() — VULNERABLE
 # ============================================================
 
-@app.get("/files/pathlib")
-def read_file_pathlib(filename: str):
-    file_path = BASE_DIR / filename
+@app.get("/service/popen")
+def service_popen(service: str):
+    command = "systemctl status " + service
 
-    content = file_path.read_text()
+    process = subprocess.Popen(
+        command,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
-    return {"content": content}
+    stdout, stderr = process.communicate()
 
-
-# ============================================================
-# PATH TRAVERSAL VARIANT 4
-# Dynamic path inside FileResponse
-# ============================================================
-
-@app.get("/files/download")
-def download_file(filename: str):
-    file_path = os.path.join("files", filename)
-
-    return FileResponse(file_path)
+    return {"output": stdout.decode()}
 
 
 # ============================================================
-# NORMAL SAFE ENDPOINT
-# This should NOT be reported as vulnerable.
+# 6. subprocess.check_output() — VULNERABLE
 # ============================================================
 
-@app.get("/users/safe")
-def get_user_safe(id: int):
-    db = get_db()
+@app.get("/host/check-output")
+def host_check_output(hostname: str):
+    command = f"hostnamectl {hostname}"
 
-    query = "SELECT * FROM users WHERE id = ?"
-    cursor = db.execute(query, (id,))
+    output = subprocess.check_output(
+        command,
+        shell=True,
+        text=True,
+    )
 
-    rows = cursor.fetchall()
-    db.close()
-
-    return {"users": rows}
-
-
-# ============================================================
-# NORMAL SAFE PATH HANDLING
-# This should NOT be reported as vulnerable.
-# ============================================================
-
-@app.get("/files/safe")
-def read_file_safe(filename: str):
-    base = BASE_DIR.resolve()
-    requested = (base / filename).resolve()
-
-    if not requested.is_relative_to(base):
-        return {"error": "Invalid path"}
-
-    return {"content": requested.read_text()}
+    return {"output": output}
 
 
 # ============================================================
-# DATABASE INITIALIZATION
+# 7. subprocess.check_call() — VULNERABLE
 # ============================================================
 
-def initialize_database():
-    db = get_db()
+@app.get("/host/check-call")
+def host_check_call(argument: str):
+    command = "echo {}".format(argument)
 
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
-            username TEXT,
-            name TEXT,
-            email TEXT
-        )
-    """)
+    subprocess.check_call(
+        command,
+        shell=True,
+    )
 
-    existing = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-
-    if existing == 0:
-        db.executemany(
-            """
-            INSERT INTO users (username, name, email)
-            VALUES (?, ?, ?)
-            """,
-            [
-                ("alice", "Alice", "alice@example.com"),
-                ("bob", "Bob", "bob@example.com"),
-                ("charlie", "Charlie", "charlie@example.com"),
-            ],
-        )
-
-    db.commit()
-    db.close()
+    return {"status": "executed"}
 
 
-initialize_database()
+# ============================================================
+# 8. SAFE — constant command
+# Should NOT be detected
+# ============================================================
+
+@app.get("/safe/list")
+def safe_list():
+    result = subprocess.run(
+        ["ls", "-la"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return {"output": result.stdout}
+
+
+# ============================================================
+# 9. SAFE — argument array
+# User input is NOT interpreted as shell syntax
+# ============================================================
+
+@app.get("/safe/ping")
+def safe_ping(host: str):
+    result = subprocess.run(
+        ["ping", "-c", "1", host],
+        check=True,
+        capture_output=True,
+        text=True,
+        shell=False,
+    )
+
+    return {"output": result.stdout}
+
+
+# ============================================================
+# 10. SAFE — constant Python command
+# ============================================================
+
+@app.get("/safe/python")
+def safe_python():
+    result = subprocess.run(
+        ["python", "--version"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return {"output": result.stdout}
