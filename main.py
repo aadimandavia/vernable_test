@@ -52,7 +52,7 @@ def dns_run(domain: str):
 
 @app.get("/service/call")
 def service_call(ip: str):
-    command = "ping -c 1 {}".format(ip)
+command = ["ping", ip]
 
     subprocess.call(
         command,
