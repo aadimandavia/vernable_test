@@ -23,7 +23,7 @@ def ping_system(host: str):
 
 @app.get("/ping/popen")
 def ping_popen(target: str):
-    command = f"ping -c 1 {target}"
+command = ["ping", target]
     result = os.popen(command).read()
 
     return {"result": result}
